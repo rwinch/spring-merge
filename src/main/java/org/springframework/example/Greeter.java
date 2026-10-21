@@ -23,7 +23,7 @@ public class Greeter {
 	}
 
 	public String farewell(String name) {
-		return "Goodbye, " + name;
+		return "Goodbye, " + (name == null ? "World" : name);
 	}
 
 }
