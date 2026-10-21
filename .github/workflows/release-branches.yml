@@ -1,0 +1,232 @@
+name: release-branches
+
+# Every push to a disclosure branch builds the branches of its release. They are built
+# again from the pushed commit every time, and nobody commits to them:
+#
+#   disclosure/frozen/<generation>   the release of the version of the branch
+#     release/<release version>               the release: the dependencies the release
+#                                             train asks for, and the version of the release
+#     disclosure/<version>-INTERNAL-SNAPSHOT  a snapshot of the version, with internal
+#                                             snapshots of the dependencies. It is thrown away
+#
+#   disclosure/active/<generation>   the hotfix of the version of the branch
+#     disclosure/<hotfix>-SNAPSHOT            the commercial license and headers, the hotfix
+#                                             version, and snapshots of the dependencies
+#     release/<hotfix>                        the release of the hotfix, from that branch
+#
+# What the release train asks for is read from the release train repository, from the
+# branch of the date that the milestone of the release is due. If there is none, the
+# branches are built without the dependency updates. A release that is ready in the
+# train is not changed: the run fails, and says what to do.
+#
+# The actions are in .github/actions, each with a README. The secrets are described in
+# .github/RELEASE_AUTOMATION.adoc.
+
+on:
+  push:
+    branches:
+      - "disclosure/frozen/**"
+      - "disclosure/active/**"
+
+permissions:
+  contents: read
+
+# One run at a time for a branch, and the newest wins: a run only pushes at the very end,
+# once, and what it creates on the way (the issues) is found again by the next run.
+concurrency:
+  group: release-branches-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    name: Plan
+    runs-on: ubuntu-latest
+    outputs:
+      release: ${{ steps.plan.outputs.release }}
+      kind: ${{ steps.plan.outputs.kind }}
+      base-version: ${{ steps.plan.outputs.base-version }}
+      hotfix: ${{ steps.plan.outputs.hotfix }}
+      snapshot-branch: ${{ steps.plan.outputs.snapshot-branch }}
+      snapshot-version: ${{ steps.plan.outputs.snapshot-version }}
+    steps:
+      - name: Check out the pushed commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Read the version
+        id: version
+        uses: spring-io/spring-release-actions/compute-version@1b8671612c3eb3d9b9763e2d7b66f1a80d00ee95 # 0.0.6
+      - name: Decide what to build
+        id: plan
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: .github/scripts/plan.sh >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build the branches
+    needs: plan
+    if: needs.plan.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    env:
+      KIND: ${{ needs.plan.outputs.kind }}
+      HOTFIX: ${{ needs.plan.outputs.hotfix }}
+      BASE_VERSION: ${{ needs.plan.outputs.base-version }}
+      SNAPSHOT_BRANCH: ${{ needs.plan.outputs.snapshot-branch }}
+      SNAPSHOT_VERSION: ${{ needs.plan.outputs.snapshot-version }}
+    steps:
+      # Everything is built in this checkout, and only the push at the end is seen by
+      # anybody. The token is that of the push, which makes the push run the workflows
+      # of the new branches, as the push of a person does. The token of the workflow does not.
+      - name: Check out the pushed commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          token: ${{ secrets.RELEASE_AUTOMATION_TOKEN }}
+          fetch-depth: 0
+      - name: Set the git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      # The disclosure branches only exist in the commercial repository, spring-merge-commercial.
+      # The project of the release train, and the OSS repository with the milestones and the
+      # issues, are named after it.
+      - name: Name the repositories
+        id: repositories
+        run: |
+          name=${GITHUB_REPOSITORY#*/}
+          project=${name%-commercial}
+          echo "project=$project" >> "$GITHUB_OUTPUT"
+          echo "oss-repository=$GITHUB_REPOSITORY_OWNER/$project" >> "$GITHUB_OUTPUT"
+      - name: Work out the release version
+        id: release
+        uses: ./.github/actions/compute-release-version
+        with:
+          snapshot-version: ${{ env.BASE_VERSION }}
+          milestone-repository: ${{ steps.repositories.outputs.oss-repository }}
+          milestone-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Name the branches
+        id: names
+        env:
+          DUE_DATE: ${{ steps.release.outputs.due-date }}
+          RELEASE_VERSION: ${{ steps.release.outputs.release-version }}
+        run: |
+          echo "train-branch=${DUE_DATE//-/.}" >> "$GITHUB_OUTPUT"
+          echo "release-branch=release/$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
+      - name: Read the release train
+        id: train
+        uses: ./.github/actions/load-train
+        with:
+          release-train-repository: ${{ vars.RELEASE_TRAIN_REPOSITORY }}
+          branch: ${{ steps.names.outputs.train-branch }}
+          token: ${{ secrets.RELEASE_AUTOMATION_TOKEN }}
+      - name: Stop if the release is ready already
+        if: steps.train.outputs.found == 'true'
+        env:
+          PROJECT: ${{ steps.repositories.outputs.project }}
+          RELEASE_VERSION: ${{ steps.release.outputs.release-version }}
+          RELEASE_BRANCH: ${{ steps.names.outputs.release-branch }}
+          TRAIN_BRANCH: ${{ steps.names.outputs.train-branch }}
+          TRAIN_FILE: ${{ steps.train.outputs.train-file }}
+        run: |
+          if jq -e --arg project "$PROJECT" --arg version "$RELEASE_VERSION" \
+            '.releases[$project][$version]["commit-hashes"].ready' "$TRAIN_FILE" > /dev/null; then
+            echo "::error title=$PROJECT $RELEASE_VERSION is ready::$PROJECT $RELEASE_VERSION is ready in the release train $TRAIN_BRANCH, and is not changed any more, so $RELEASE_BRANCH was not built. To release the next version instead: set the version of gradle.properties to the next version in the OSS repository, and merge forward, so that the next push is for the next release."
+            exit 1
+          fi
+      - name: There is no release train
+        if: steps.train.outputs.found != 'true'
+        env:
+          TRAIN_BRANCH: ${{ steps.names.outputs.train-branch }}
+        run: echo "::notice title=No release train::The release train $TRAIN_BRANCH has not been created, so the dependencies are not updated. The branches are built without that."
+
+      # The snapshot branch: from the pushed commit. A hotfix has the commercial license and
+      # headers first. Then its version, and the dependencies that have joined the release
+      # train, as snapshots. Nothing of that has an issue: it is thrown away, or replaced.
+      - name: Start the snapshot branch
+        run: git switch --quiet -C "$SNAPSHOT_BRANCH" "$GITHUB_SHA"
+      - name: Apply the commercial license
+        if: env.KIND == 'active'
+        uses: ./.github/actions/apply-commercial-license
+        with:
+          commit-message: Commercial changes for ${{ steps.release.outputs.release-version }}
+      - name: Set the version of the snapshot
+        run: .github/scripts/set-version.sh "$SNAPSHOT_VERSION" "Set the version to $SNAPSHOT_VERSION"
+      - name: Work out the snapshots of the dependencies
+        id: snapshot-versions
+        if: steps.train.outputs.found == 'true'
+        uses: ./.github/actions/map-train-versions
+        with:
+          release-versions-file: ${{ steps.train.outputs.release-versions-file }}
+          train-file: ${{ steps.train.outputs.train-file }}
+          prefer-hotfix: ${{ env.HOTFIX }}
+          suffix: -INTERNAL-SNAPSHOT
+          hotfix-suffix: -SNAPSHOT
+      - name: Update the dependencies of the snapshot
+        if: steps.train.outputs.found == 'true'
+        uses: ./.github/actions/update-versions
+        with:
+          versions: ${{ steps.snapshot-versions.outputs.versions }}
+          require-issue: "false"
+
+      # The release branch: from the pushed commit, and for a hotfix from the snapshot
+      # branch. The dependencies of the release train, each with an issue and a commit,
+      # and the version of the release, last.
+      - name: Start the release branch
+        env:
+          BASE: ${{ env.KIND == 'active' && env.SNAPSHOT_BRANCH || github.sha }}
+          RELEASE_BRANCH: ${{ steps.names.outputs.release-branch }}
+        run: git switch --quiet -C "$RELEASE_BRANCH" "$BASE"
+      - name: Work out the versions of the dependencies
+        id: versions
+        if: steps.train.outputs.found == 'true'
+        uses: ./.github/actions/map-train-versions
+        with:
+          release-versions-file: ${{ steps.train.outputs.release-versions-file }}
+          train-file: ${{ steps.train.outputs.train-file }}
+          prefer-hotfix: ${{ env.HOTFIX }}
+      - name: Make sure that there are issues
+        id: issues
+        if: steps.train.outputs.found == 'true'
+        uses: ./.github/actions/ensure-dependency-issues
+        with:
+          versions: ${{ steps.versions.outputs.versions }}
+          repository: ${{ steps.repositories.outputs.oss-repository }}
+          milestone: ${{ steps.release.outputs.release-version }}
+          labels: "type: dependency-upgrade"
+          token: ${{ secrets.RELEASE_AUTOMATION_TOKEN }}
+      # An issue that someone closed is a decision to leave the update, so it is left.
+      - name: Leave the updates of closed issues
+        id: updates
+        if: steps.train.outputs.found == 'true'
+        env:
+          ISSUES: ${{ steps.issues.outputs.issues }}
+        run: |
+          jq -r 'to_entries[] | select(.value.closed) | "::notice title=Left alone::\(.key) \(.value.version) is left alone: its issue #\(.value.issue) is closed"' <<< "$ISSUES"
+          echo "versions=$(jq -c 'with_entries(select(.value.closed | not)) | map_values({version, issue})' <<< "$ISSUES")" >> "$GITHUB_OUTPUT"
+      - name: Update the dependencies of the release
+        if: steps.train.outputs.found == 'true'
+        uses: ./.github/actions/update-versions
+        with:
+          versions: ${{ steps.updates.outputs.versions }}
+      - name: Set the version of the release
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.release-version }}
+        run: .github/scripts/set-version.sh "$RELEASE_VERSION" "Release $RELEASE_VERSION"
+
+      # Both at once, or none: so a failure never leaves one of them built and not the other.
+      # It is forced, because the branches are built again from the pushed commit every time.
+      - name: Push the branches
+        env:
+          RELEASE_BRANCH: ${{ steps.names.outputs.release-branch }}
+        run: git push --atomic --force origin "$SNAPSHOT_BRANCH" "$RELEASE_BRANCH"
+      - name: Summarize
+        env:
+          RELEASE_BRANCH: ${{ steps.names.outputs.release-branch }}
+          RELEASE_VERSION: ${{ steps.release.outputs.release-version }}
+        run: |
+          {
+            echo "### $GITHUB_REF_NAME"
+            echo
+            echo "| Branch | Version | Commits on the pushed commit |"
+            echo "|---|---|---|"
+            echo "| \`$RELEASE_BRANCH\` | $RELEASE_VERSION | $(git rev-list --count "$GITHUB_SHA..$RELEASE_BRANCH") |"
+            echo "| \`$SNAPSHOT_BRANCH\` | $SNAPSHOT_VERSION | $(git rev-list --count "$GITHUB_SHA..$SNAPSHOT_BRANCH") |"
+          } >> "$GITHUB_STEP_SUMMARY"

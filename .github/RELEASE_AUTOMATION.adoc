@@ -1,0 +1,186 @@
+= The release automation
+:toc:
+:toclevels: 2
+
+A push to a disclosure branch of the commercial repository builds the branches of its release, with no one doing it by hand. This is the guide to it: what it builds, what it needs, how to give it the secrets that it needs, and what to do when it fails.
+
+== What a push builds
+
+Two workflows, in `.github/workflows`, and the actions in `.github/actions` (each has a README):
+
+`release-branches.yml`::
+Runs for a push to `disclosure/frozen/**` or `disclosure/active/**`. It builds the branches of the release again from the pushed commit, every time, and pushes them once, both or none, forced. Nobody commits to them.
+`publish-snapshots.yml`::
+Runs for a push to a snapshot branch that the first one built. It publishes the snapshot of its version. (In the tutorial that is pretended: the jar is built, and what would be published is logged.)
+
+[cols="2,3,3"]
+|===
+| | A frozen disclosure, `disclosure/frozen/7.0.x` (`7.0.1-SNAPSHOT`) | An active disclosure, `disclosure/active/7.0.x` (`7.0.1-SNAPSHOT`)
+
+| The release
+| `release/7.0.1`, from the pushed commit. For a `.0` version (`7.1.0-SNAPSHOT`) the release is the next milestone: `release/7.1.0-RC1`
+| `release/7.0.1.1`, *from the snapshot branch*: it is the hotfix of `7.0.1`
+
+| The commits of the release
+| one for each dependency that the release train asks for, with its issue (`Closes gh-123`), and then `Release 7.0.1`
+| the same, for the hotfix versions of the dependencies if the train has them, and then `Release 7.0.1.1`
+
+| The snapshot branch
+| `disclosure/7.0.1-INTERNAL-SNAPSHOT`: its version, and an internal snapshot of every dependency that has joined the train (no issues). Thrown away when the release is done
+| `disclosure/7.0.1.1-SNAPSHOT`: the commercial license and the Broadcom headers, its version, and a snapshot of every dependency that has joined the train (no issues)
+
+| Not built
+| a hotfix (a frozen disclosure has none)
+| nothing at all for a version that ends with `.0`: it is not a patch release, so it has no hotfix
+|===
+
+Which versions of the dependencies the release needs comes from the *release train*, a repository with a branch for each release date (`2026.11.19`) that has `release-versions.json` and `train.yml`. The branch is the date that the milestone of the release is due. If that train has not been created, the branches are built without the dependency updates. If the release is *ready* in the train, it is not changed: the run fails and says what to do.
+
+== The secret, the variable, and the tokens
+
+The workflows need one secret and one variable, which are settings of the *commercial repository*:
+
+[cols="2,1,4"]
+|===
+| Name | Kind | What it is
+
+| `RELEASE_AUTOMATION_TOKEN`
+| secret
+| A token that can read the release train repository, create issues in the OSS repository, and push to the commercial repository. See below.
+
+| `RELEASE_TRAIN_REPOSITORY`
+| variable
+| The release train repository, `owner/repo`. If it is not set, it is `spring-io/release-train`.
+|===
+
+Everything that can be done with the token of the workflow itself, `GITHUB_TOKEN`, is: the permissions of the workflow are `contents: read`, and it reads the milestones of the OSS repository, which is public. `RELEASE_AUTOMATION_TOKEN` is only used where `GITHUB_TOKEN` cannot:
+
+[cols="3,3,3"]
+|===
+| Step | Token | Why
+
+| the checkout, and the push of the branches
+| `RELEASE_AUTOMATION_TOKEN`
+| it writes to the commercial repository, and a push with it *runs workflows* (`publish-snapshots.yml`, and the build of the new branches). A push with `GITHUB_TOKEN` runs none.
+
+| `load-train`
+| `RELEASE_AUTOMATION_TOKEN`
+| the release train repository is private, and is another repository than this one.
+
+| `ensure-dependency-issues`
+| `RELEASE_AUTOMATION_TOKEN`
+| the issues are in the OSS repository, which is another repository than this one.
+
+| `compute-release-version`
+| `GITHUB_TOKEN`
+| it reads the milestones of the OSS repository, which is public.
+
+| `publish-snapshots.yml`
+| `GITHUB_TOKEN`
+| it reads this repository, and in the tutorial publishes nothing.
+|===
+
+=== What the token needs
+
+[cols="3,3,3"]
+|===
+| Repository | What for | Fine-grained token | Classic token
+
+| the release train repository
+| read its branches and files
+| *Contents: Read-only*
+| `repo`
+
+| the OSS repository
+| read its milestones, create and read its issues
+| *Issues: Read and write*
+| `repo` (`public_repo` for a public repository)
+
+| the commercial repository
+| fetch it, and push the branches
+| *Contents: Read and write*
+| `repo`
+|===
+
+*A fine-grained token has one owner.* When the three repositories are in one account or one organization (as in the tutorial), one fine-grained token with those three permissions does. When they are not (the real ones: the release train is in `spring-io`, the others in `spring-projects`), a fine-grained token cannot cover them, and you need a classic token, whose `repo` scope covers every repository that its user can access. Make it the token of a machine user that has the access that it needs, and not that of a person. The scopes are broad, and are the reason to keep the secret in the commercial repository only.
+
+=== Create a classic token
+
+. Go to https://github.com/settings/tokens and choose *Generate new token (classic)*.
+. Give it a name (`release automation`) and an expiration, and select the scope `repo`.
+. Generate it, and copy it. It is shown once.
+. For an organization that uses SAML single sign-on, choose *Configure SSO* next to the token and authorize the organizations of the repositories. Without it the token cannot read them.
+
+=== Create a fine-grained token
+
+. Go to https://github.com/settings/personal-access-tokens and choose *Generate new token*.
+. Choose the *resource owner* that owns the three repositories.
+. Choose *Only select repositories*, and select the release train repository, the OSS repository and the commercial repository.
+. Under *Repository permissions*, set *Contents* to *Read and write* (that is for the commercial repository, and reads the release train too), and *Issues* to *Read and write*. Metadata (read) is added by itself.
+. Generate it, and copy it.
+
+=== Store it
+
+In the *commercial repository*, as a secret named `RELEASE_AUTOMATION_TOKEN`: *Settings*, *Secrets and variables*, *Actions*, *New repository secret*. Or with `gh`, which reads the secret from standard input, so that it is not in your history:
+
+[source,shell]
+----
+gh secret set RELEASE_AUTOMATION_TOKEN --repo your-organization/spring-security-commercial
+gh variable set RELEASE_TRAIN_REPOSITORY --body spring-io/release-train --repo your-organization/spring-security-commercial
+----
+
+=== The tutorial does this for you, with a shortcut
+
+`./setup.sh` stores the token of your own `gh` (`gh auth token`) as the secret, and sets the variable to the practice release train that it makes. The token of `gh` has the scope `repo`, which covers everything above. *This is only for the throwaway repositories of the tutorial:* it gives the workflow all the access that you have. To try a narrower token, export it before you run setup, and it is used instead:
+
+[source,shell]
+----
+RELEASE_AUTOMATION_TOKEN=github_pat_... ./setup.sh
+----
+
+== When it fails
+
+Every message says what went wrong. These are the usual ones:
+
+[cols="3,5"]
+|===
+| The run fails at | What to do
+
+| *Stop if the release is ready already*
+| The release is ready in the release train, and is not changed any more. To release the next version instead: set the version of `gradle.properties` to the next version in the OSS repository, and merge forward.
+
+| *Work out the release version*: `has no milestone 7.0.1`
+| Create the milestone of the release in the OSS repository, with a due date.
+
+| *Work out the release version*: `has no due date`
+| Set the due date of the milestone. It is the date of the release train, `2026-11-19` for the train `2026.11.19`.
+
+| *Read the release train*: `404 ... cannot read it`
+| The token cannot read the release train repository, or `RELEASE_TRAIN_REPOSITORY` is wrong. A train that has not been created is not an error: the branches are built without the dependencies.
+
+| *Make sure that there are issues*: `403`
+| The token cannot create issues in the OSS repository: see what it needs.
+
+| *Work out the versions of the dependencies*: `is newer than the ... of the train`
+| The version catalog has a newer version of a dependency than the release train. Something is out of order: look at it. The action does not downgrade.
+
+| *Set the version of the release*: `git does not know who commits`
+| git has no `user.name` and `user.email`. The workflow sets them, so this is a change to the workflow.
+
+| *Push the branches*: rejected
+| The token cannot push to the commercial repository, or a branch is protected against a forced push. Nobody commits to the branches that it builds, so they can be forced.
+|===
+
+A run that was cancelled by a newer push of the same branch is not a failure: the newer run builds the branches.
+
+== Using it in another project
+
+Everything is in `.github`: the workflows, the scripts, the actions, and this guide. For another project:
+
+* The version catalog, `gradle/libs.versions.toml`, names a version after the project of the release train that releases it (`spring-framework = "7.0.9"`), in its `[versions]` section, one on a line. A library refers to it with `version.ref`.
+* The OSS repository has the milestones of the releases, with their due dates (at noon UTC). The commercial repository is named like it, with `-commercial`, and has the disclosure branches.
+* The workflows run from the pushed branch, so the workflows and the actions must be on every disclosure branch: they come with the merges forward.
+* `.github/actions/apply-commercial-license` has the commercial license for a hotfix: replace it with the license of the project.
+* Publishing is pretended: replace the last step of `publish-snapshots.yml`.
+* The actions are written for Node 24, as the actions of https://github.com/spring-io/spring-release-actions are, and are meant to move there. `.github/actions/README.adoc` says how to build and test them.
+* GitHub is retiring the version `2022-11-28` of its API, which is the one that the actions use. It is a warning for now, and is removed on 2028-03-10: move them to a newer version before that.

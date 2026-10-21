@@ -1,0 +1,19 @@
+# A version catalog like the one of the template, with what the actions must not trip over.
+
+[versions]
+com-squareup-okhttp3 = "3.14.9"
+micrometer = "1.16.7"
+org-aspectj = "1.9.25.1"
+reactor = "2025.0.7"
+spring-data-bom = "2025.1.7"
+spring-framework = "7.0.9"
+spring-ldap = "4.0.5"
+com-password4j = "1.8.4"
+
+[libraries]
+io-micrometer-micrometer-bom = { module = "io.micrometer:micrometer-bom", version.ref = "micrometer" }
+# a library that has the name of a version, and must not be read as one
+reactor = "io.projectreactor:reactor-bom:2025.0.7"
+
+[plugins]
+org-springframework-boot = { id = "org.springframework.boot", version = "3.5.0" }

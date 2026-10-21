@@ -1,0 +1,81 @@
+name: publish-snapshots
+
+# Every push to a snapshot branch that release-branches.yml builds publishes the artifacts
+# of its version as a snapshot:
+#
+#   disclosure/<version>-INTERNAL-SNAPSHOT   the internal snapshot of a frozen disclosure,
+#                                            which the release train takes the version from
+#   disclosure/<hotfix>-SNAPSHOT             the snapshot of a hotfix
+#
+# The pushes of release-branches.yml run this workflow because they are made with the token
+# RELEASE_AUTOMATION_TOKEN: a push made with the token of a workflow does not run workflows.
+#
+# In the tutorial the publishing is pretended. The jar is built, and what would be
+# published is logged and put in the summary, for a real project to replace the last
+# step with the publishing of its artifacts (and give the job the permission or the secret
+# that it takes).
+
+on:
+  push:
+    branches:
+      - "disclosure/*-SNAPSHOT"
+
+permissions:
+  contents: read
+
+# The newest push of a branch wins, as in release-branches.yml
+concurrency:
+  group: publish-snapshots-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    name: Publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the pushed commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Java
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v5.0.0
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Read the version
+        id: version
+        uses: spring-io/spring-release-actions/compute-version@1b8671612c3eb3d9b9763e2d7b66f1a80d00ee95 # 0.0.6
+      - name: Check that it is a snapshot
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          if [[ "$VERSION" != *-SNAPSHOT ]]; then
+            echo "::error title=Not a snapshot::$BRANCH has the version $VERSION, which is not a snapshot: nothing is published"
+            exit 1
+          fi
+      - name: Build the jar
+        run: ./gradlew --no-daemon jar
+      - name: Publish (pretended)
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          shopt -s nullglob
+          jars=(build/libs/*.jar)
+          if [ ${#jars[@]} -eq 0 ]; then
+            echo "::error::The build made no jar in build/libs"
+            exit 1
+          fi
+          {
+            echo "### $BRANCH"
+            echo
+            echo "Would publish the snapshot $VERSION:"
+            echo
+            echo "| File | Bytes | SHA-256 |"
+            echo "|---|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+          for jar in "${jars[@]}"; do
+            bytes=$(wc -c < "$jar" | tr -d ' ')
+            sha=$(shasum -a 256 "$jar" | cut -d' ' -f1)
+            echo "Would publish $jar as the snapshot $VERSION ($bytes bytes, sha256 $sha)"
+            echo "| \`$(basename "$jar")\` | $bytes | \`${sha:0:16}…\` |" >> "$GITHUB_STEP_SUMMARY"
+          done

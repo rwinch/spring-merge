@@ -1,0 +1,158 @@
+state: started
+deployment-destinations:
+- maven_central
+- spring_enterprise
+schedule:
+  participation:
+    join: 2026-12-04
+    ready: 2026-12-11
+  operation:
+    dry-run: 2026-12-14
+    stage: 2026-12-15
+    promote: 2026-12-17
+  publication:
+    oss-ga: 2026-12-17
+releases:
+  micrometer:
+    "1.16.8":
+      release-repository: micrometer-metrics/micrometer-commercial
+      initial-release-branch-type: release
+      deployment-destination: maven_central
+      state: tested
+      commit-hashes:
+        joined: e9e47415047e3b6b03e9b50b2428d5d85f20faf9
+        ready: 62a937fb8373ecead9d60a6b0faf99aa8530e283
+        built: 62a937fb8373ecead9d60a6b0faf99aa8530e283
+        tested: 62a937fb8373ecead9d60a6b0faf99aa8530e283
+    "1.17.2":
+      release-repository: micrometer-metrics/micrometer-commercial
+      initial-release-branch-type: release
+      deployment-destination: maven_central
+      state: tested
+      commit-hashes:
+        joined: 748585aaeba76b78cd683ea7694d87f550225fe8
+        ready: aa9f1f8207ad84231c1ebc867ef75062cf1e902c
+        built: aa9f1f8207ad84231c1ebc867ef75062cf1e902c
+        tested: aa9f1f8207ad84231c1ebc867ef75062cf1e902c
+  reactor:
+    "2025.0.8":
+      release-repository: reactor/reactor-commercial
+      initial-release-branch-type: release
+      deployment-destination: maven_central
+      state: joined
+      commit-hashes:
+        joined: adc0d6dbc96d0b7fb94ab4c487abbf777a2977db
+    "2026.0.0-RC1":
+      release-repository: reactor/reactor-commercial
+      initial-release-branch-type: release
+      deployment-destination: maven_central
+      state: tested
+      commit-hashes:
+        joined: 855b0a8afd10d852e120425ac1d19cde3eff68a8
+        ready: 38371b47221efea877eb611471dc5c4d3f616fd4
+        built: 38371b47221efea877eb611471dc5c4d3f616fd4
+        tested: 38371b47221efea877eb611471dc5c4d3f616fd4
+  spring-data-bom:
+    "2025.1.8":
+      release-repository: spring-projects/spring-data-commercial
+      initial-release-branch-type: release
+      deployment-destination: maven_central
+      state: tested
+      commit-hashes:
+        joined: 68a1ee9f5a03d7e9a3f4b755b0ade857c860602a
+        ready: 3e2581df712f139991c5405c6f076f7b32bee4fb
+        built: 3e2581df712f139991c5405c6f076f7b32bee4fb
+        tested: 3e2581df712f139991c5405c6f076f7b32bee4fb
+    "2025.1.8.1":
+      release-repository: spring-projects/spring-data-commercial
+      initial-release-branch-type: release
+      deployment-destination: spring_enterprise
+      state: tested
+      commit-hashes:
+        joined: 83274d1e58114676ba5016bd36683b75943bfe4e
+        ready: 18fd04c985923ae0e9362b13d69b341537bf5004
+        built: 18fd04c985923ae0e9362b13d69b341537bf5004
+        tested: 18fd04c985923ae0e9362b13d69b341537bf5004
+    "2026.0.2":
+      release-repository: spring-projects/spring-data-commercial
+      initial-release-branch-type: release
+      deployment-destination: maven_central
+      state: tested
+      commit-hashes:
+        joined: f7841fe43c255b55de2f36e5d0d0d685e738a119
+        ready: cb426084577644fd83d89d92f1c8da5c9f23e5be
+        built: cb426084577644fd83d89d92f1c8da5c9f23e5be
+        tested: cb426084577644fd83d89d92f1c8da5c9f23e5be
+  spring-framework:
+    "7.0.10":
+      release-repository: spring-projects/spring-framework-commercial
+      initial-release-branch-type: release
+      deployment-destination: maven_central
+      state: tested
+      commit-hashes:
+        joined: 7c8d46ca0f85bef7ba8028a43663bd3b2c7afdf0
+        ready: 8ebcee302ca16a993996d24ea2264f7ac63d056c
+        built: 8ebcee302ca16a993996d24ea2264f7ac63d056c
+        tested: 8ebcee302ca16a993996d24ea2264f7ac63d056c
+    "7.0.10.1":
+      release-repository: spring-projects/spring-framework-commercial
+      initial-release-branch-type: release
+      deployment-destination: spring_enterprise
+      state: tested
+      commit-hashes:
+        joined: 8ac6ff8dbcb00111b42680b70bfb1afd73aafb6f
+        ready: 485339a89d0a29fad71ac040749b58d372d2788c
+        built: 485339a89d0a29fad71ac040749b58d372d2788c
+        tested: 485339a89d0a29fad71ac040749b58d372d2788c
+    "7.1.0-RC1":
+      release-repository: spring-projects/spring-framework-commercial
+      initial-release-branch-type: release
+      deployment-destination: maven_central
+      state: tested
+      commit-hashes:
+        joined: 972366080a1b8a90aed68b4d67e7d5da5a448926
+        ready: 129d0cc3407d8f56d223226191c18e7aa084364b
+        built: 129d0cc3407d8f56d223226191c18e7aa084364b
+        tested: 129d0cc3407d8f56d223226191c18e7aa084364b
+  spring-ldap:
+    "4.0.6":
+      release-repository: spring-projects/spring-ldap-commercial
+      initial-release-branch-type: release
+      deployment-destination: maven_central
+      state: tested
+      commit-hashes:
+        joined: 5ad52f343188361b637c997fe3c7fb92e3bf872f
+        ready: fbfa14e8f16dac78465f9b763e4363f5211ada81
+        built: fbfa14e8f16dac78465f9b763e4363f5211ada81
+        tested: fbfa14e8f16dac78465f9b763e4363f5211ada81
+    "4.0.6.1":
+      release-repository: spring-projects/spring-ldap-commercial
+      initial-release-branch-type: release
+      deployment-destination: spring_enterprise
+      state: tested
+      commit-hashes:
+        joined: 87e9099d323745b9dcc63c3ab1fef348728d7910
+        ready: 78bcae2203ea02f59c43283c4fe859cceb5b5ab0
+        built: 78bcae2203ea02f59c43283c4fe859cceb5b5ab0
+        tested: 78bcae2203ea02f59c43283c4fe859cceb5b5ab0
+    "4.1.2":
+      release-repository: spring-projects/spring-ldap-commercial
+      initial-release-branch-type: release
+      deployment-destination: maven_central
+      state: tested
+      commit-hashes:
+        joined: b36e2cc0dee5f55427f77366429e6782b1db1661
+        ready: d491ceaa28f20e2e86b036c82ea3b320dc3ef666
+        built: d491ceaa28f20e2e86b036c82ea3b320dc3ef666
+        tested: d491ceaa28f20e2e86b036c82ea3b320dc3ef666
+  spring-merge:
+    "7.1.0":
+      release-repository: example/spring-merge-commercial
+      initial-release-branch-type: release
+      deployment-destination: maven_central
+      state: tested
+      commit-hashes:
+        joined: 01cd8490798fbddb056e5d6da7de127410700998
+        ready: 35e50dbd55d9ef56714de83af50fc7970ea700d3
+        built: 35e50dbd55d9ef56714de83af50fc7970ea700d3
+        tested: 35e50dbd55d9ef56714de83af50fc7970ea700d3

@@ -1,0 +1,116 @@
+= load-train
+
+Reads a release train from the release train repository, so that the other actions can use it. A release train has a branch named after its date (`2026.11.19`) with two files:
+
+`release-versions.json`::
+The projects of the train with the versions they release: `{ "spring-framework" : [ "7.0.10", "7.0.10.1", "7.1.0-RC1" ], ... }`.
+
+`train.yml`::
+The state of the train. Under `releases`, every version of every project has the commit hashes of the steps it went through: `joined`, `ready`, `built`, `tested`.
+
+== A train that has not been created is no data
+
+The branch of a train is created some time before its date. Until then, there is nothing to read, and that is not an error: the action succeeds with `found` set to `false` and empty data, and the workflow skips what needs the train.
+
+Everything else that goes wrong is an error. The repository is read first, so that a repository that does not exist or that the token cannot read (GitHub answers `404` to both) fails, instead of looking like a train that is not there.
+
+== Inputs
+
+[cols="2,1,4"]
+|===
+| Input | Required | Description
+
+| `release-train-repository`
+| no, `spring-io/release-train`
+| The repository (`owner/repo`) of the release train.
+
+| `branch`
+| yes
+| The branch of the train, `2026.11.19`.
+
+| `token`
+| yes, for a private repository
+| A token that can read the repository, see below.
+
+| `output-directory`
+| no
+| Where to write the two files. A new directory in `RUNNER_TEMP` by default.
+|===
+
+== Outputs
+
+[cols="2,4"]
+|===
+| Output | Description
+
+| `found`
+| `true` if the train exists, `false` if it has not been created.
+
+| `release-versions`
+| The content of `release-versions.json`, as JSON. `{}` if there is no train. Read a part of it in a workflow with `fromJSON(steps.train.outputs.release-versions)['spring-framework']`.
+
+| `train`
+| The content of `train.yml`, as JSON (it is converted from YAML). `{}` if there is no train.
+
+| `release-versions-file`, `train-file`
+| The paths of two files with the same JSON. A real train is large (`train.yml` of the real train of 2026-10-22, with 63 projects and 317 releases, is 240 KB as JSON), and the input of an action is an environment variable, which is limited to 128 KB on Linux. To pass the train to another action, or to read it with `jq`, use these files.
+|===
+
+== Fails when
+
+* the repository does not exist, or the token cannot read it
+* GitHub answers with another error than that the branch does not exist
+* the branch exists, but has no `release-versions.json` or no `train.yml`
+* one of them is not valid JSON, or YAML
+
+== Secrets and permissions
+
+The release train repository is *private*, and it is in another repository than the one that runs the workflow, so `GITHUB_TOKEN` cannot read it. A token that is stored as a secret is needed, with read access to the *contents* of the release train repository (and nothing else):
+
+* a fine-grained personal access token, with the release train repository as its only repository, and *Contents: Read-only*
+* a classic personal access token with the `repo` scope. It is broader, and works for every repository you can read.
+
+Create it at https://github.com/settings/personal-access-tokens (fine-grained) or https://github.com/settings/tokens (classic), and store it as a secret of the repository that runs the workflow. The release workflow uses the secret `RELEASE_AUTOMATION_TOKEN`, see `.github/RELEASE_AUTOMATION.adoc`.
+
+== Using it
+
+[source,yaml]
+----
+- id: train
+  uses: ./.github/actions/load-train
+  with:
+    release-train-repository: ${{ vars.RELEASE_TRAIN_REPOSITORY }}
+    branch: 2026.11.19
+    token: ${{ secrets.RELEASE_AUTOMATION_TOKEN }}
+- if: steps.train.outputs.found == 'true'
+  run: jq '.releases | keys' "${{ steps.train.outputs.train-file }}"
+----
+
+== Running it locally
+
+It is an ordinary Node program (Node 24). `npm install` once in `.github/actions/`, then run it with its inputs as `INPUT_<NAME>` variables, and the file of its outputs as `GITHUB_OUTPUT`. Against your practice release train, after `./setup.sh`:
+
+[source,shell]
+----
+cd .github/actions
+npm install
+export GITHUB_OUTPUT=$(mktemp)
+env 'INPUT_RELEASE-TRAIN-REPOSITORY=your-github-user/release-train' \
+    'INPUT_BRANCH=2026.11.19' \
+    "INPUT_TOKEN=$(gh auth token)" \
+    node src/load-train/index.js
+cat "$GITHUB_OUTPUT"
+----
+
+Or with no GitHub at all, against the fake in `test/support/fake-github.js`, which serves one branch for every directory of `test/fixtures/train/` (copies of the practice train of the tutorial):
+
+[source,shell]
+----
+node test/support/fake-github.js 8123 &
+env GITHUB_API_URL=http://127.0.0.1:8123 \
+    'INPUT_RELEASE-TRAIN-REPOSITORY=tutorial/release-train' 'INPUT_BRANCH=2026.11.19' \
+    node src/load-train/index.js
+kill %1
+----
+
+Use a branch that does not exist (`2030.01.01`) to see the train that has not been created. `npm test` runs its tests, which need no network and no token.

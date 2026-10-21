@@ -1,0 +1,33 @@
+name: "load-train"
+description: "Reads a release train (release-versions.json and train.yml of its branch) from the release train repository. A train that has not been created is no data, not an error"
+
+inputs:
+  release-train-repository:
+    description: "The release train repository (owner/repo)"
+    required: false
+    default: "spring-io/release-train"
+  branch:
+    description: "The branch of the train, named after its date, for example 2026.11.19"
+    required: true
+  token:
+    description: "A token that can read the release train repository, which is private"
+    required: false
+  output-directory:
+    description: "The directory to write the two JSON files to. A new directory in RUNNER_TEMP by default"
+    required: false
+
+outputs:
+  found:
+    description: "true if the train exists, false if it has not been created (the branch does not exist)"
+  release-versions:
+    description: "The content of release-versions.json, as JSON: the project ids with the versions they release. {} if the train was not found"
+  train:
+    description: "The content of train.yml, as JSON. {} if the train was not found. A real train can be large: prefer train-file to pass it to another action"
+  release-versions-file:
+    description: "The path of a file with release-versions.json as JSON"
+  train-file:
+    description: "The path of a file with train.yml as JSON"
+
+runs:
+  using: "node24"
+  main: "../dist/load-train/index.js"

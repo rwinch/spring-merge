@@ -1,0 +1,73 @@
+= The actions of the release automation
+
+The actions of `.github/workflows/release-branches.yml`, in Node 24, written so that each one can also be run, and tested, on this machine. The guide to the whole is `.github/RELEASE_AUTOMATION.adoc`: what the workflows build, and the secrets that they need.
+
+[cols="2,5"]
+|===
+| Action | What it does
+
+| link:compute-release-version/README.adoc[`compute-release-version`]
+| The version that a snapshot version is released as, and its due date, from the milestones of a repository.
+
+| link:load-train/README.adoc[`load-train`]
+| Reads a release train: `release-versions.json` and `train.yml` of its branch. A train that has not been created is no data.
+
+| link:map-train-versions/README.adoc[`map-train-versions`]
+| Which versions of a version catalog the release train asks to change, and to what.
+
+| link:ensure-dependency-issues/README.adoc[`ensure-dependency-issues`]
+| An issue for every dependency update, in a milestone. It makes the ones that are missing.
+
+| link:update-versions/README.adoc[`update-versions`]
+| Changes the versions of a version catalog, with one commit for each.
+
+| link:apply-commercial-license/README.adoc[`apply-commercial-license`]
+| The commercial license and the Broadcom headers, for a hotfix.
+|===
+
+Only the last two know anything about the repository that they run in, and only `map-train-versions` and `load-train` know the release train. The scripts of the workflow are in `.github/scripts`: `plan.sh` decides what a push builds, and `set-version.sh` sets the version in a commit.
+
+== Work on them
+
+Node 24 (the latest long term support version of Node), and `npm install` here once. Then:
+
+[cols="1,4"]
+|===
+| Command | What it does
+
+| `npm test`
+| All the tests, with no network and no token, in about a minute and a half. They include the release workflow itself, run end to end: see below. The tests that build the project with Gradle need Java and the Gradle of the wrapper (`SKIP_BUILD=1` skips them).
+
+| `npm run build`
+| Formats the code, and bundles every action into `dist/`, which is what GitHub runs: there is no `npm install` on a runner. `dist/` is committed, and is checked by the tests: they run the bundles as well as the sources.
+
+| `npm run check`
+| Checks the formatting.
+|===
+
+The layout:
+
+* `src/<action>/index.js` is the action. `run()` has the logic, and `main()` reads the inputs and writes the outputs. `src/lib` has what they share.
+* `<action>/action.yml` and `README.adoc` are what GitHub reads, and what a person reads.
+* `dist/<action>/` is the bundle.
+* `test/` has the tests, `test/fixtures` the data of them, and `test/support` what they use.
+
+== Run an action
+
+Each README says how, with its own example. In general an action is a program. Its inputs are environment variables named `INPUT_<NAME>`, as GitHub passes them, and it writes its outputs to the file named by `GITHUB_OUTPUT`, which must exist:
+
+[source,shell]
+----
+export GITHUB_OUTPUT=$(mktemp)
+env 'INPUT_SNAPSHOT-VERSION=7.0.1-SNAPSHOT' 'INPUT_MILESTONE-REPOSITORY=your-github-user/spring-merge' \
+    node src/compute-release-version/index.js
+cat "$GITHUB_OUTPUT"
+----
+
+`GITHUB_API_URL` points an action at another GitHub: `node test/support/fake-github.js` is a small fake, with the milestones, the issues and the release train of the tests.
+
+== Run the release workflow here
+
+`npm test` runs `release-branches.yml` and `publish-snapshots.yml` themselves, in `test/release-branches.test.js` and `test/publish-snapshots.test.js`, with no GitHub and no Docker (`act` needs both). `test/support/run-workflow.js` is a small runner that reads the workflow file: its jobs, steps, `if`, `needs`, outputs and `${{ }}` expressions. It runs the real actions and scripts in a fresh checkout for every job, against a bare repository that is the commercial repository, and the fake GitHub. It is not GitHub: it knows what these workflows use, and says so when a workflow asks for more. The cases are the ones of the tutorial: a frozen and an active disclosure, a `.0` version, no train, a dependency that has not joined, a release that is ready, an issue that was closed, a rerun over old branches, and failures that must push nothing.
+
+If you change the workflow, a test fails for what you broke: the tests were checked by breaking the force push, the base of the release, the license step and the check of a ready release.

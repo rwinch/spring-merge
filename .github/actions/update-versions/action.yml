@@ -1,0 +1,29 @@
+name: "update-versions"
+description: "Changes the versions of a Gradle version catalog, with one commit for each. It knows nothing about the release train"
+
+inputs:
+  versions:
+    description: "The versions to change, as a JSON object from the name of a version in the catalog to its new version, or to { \"version\": ..., \"issue\": ... } where issue is the number of the issue that the commit closes"
+    required: true
+  toml-path:
+    description: "The path of the version catalog, in the repository"
+    required: false
+    default: "gradle/libs.versions.toml"
+  path:
+    description: "The directory of the git repository"
+    required: false
+    default: "."
+  require-issue:
+    description: "Whether every update must have an issue. If not, the commit of an update without an issue has no Closes line"
+    required: false
+    default: "true"
+
+outputs:
+  commits:
+    description: "The commits that were made, as a JSON array of { dependency, version, issue, commit }"
+  count:
+    description: "How many commits were made"
+
+runs:
+  using: "node24"
+  main: "../dist/update-versions/index.js"

@@ -1,0 +1,99 @@
+= update-versions
+
+Changes the versions of a Gradle version catalog (`gradle/libs.versions.toml`) in a git repository, with *one commit for each*. It knows nothing about the release train, or where the versions come from: it is given the names and the new versions. (`map-train-versions` works them out, and `ensure-dependency-issues` has the issues.)
+
+== What it does
+
+For every version, in the order of the names, it changes the line `name = "value"` of the `[versions]` section of the catalog and commits it:
+
+----
+Update spring-framework to 7.0.10
+
+Closes gh-123
+
+Signed-off-by: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>
+----
+
+* *Only that line changes.* The other lines, the comments, the spaces around the equals sign and the line endings stay the way they were. A line of another section that looks the same (a library of the same name) is not touched.
+* *The message is fixed.* It is not an input, so the history of a catalog reads the same everywhere. The `Closes` line is only there if the update has an issue.
+* *The commit is signed off* with the identity that git is set up with (`git config user.name` and `user.email`). That is the identity of the commits, too, and it is not signed with a key.
+* *Everything is checked before the first commit.* A name that is not in the catalog, a version that cannot be written, or an issue that is missing or is not a number, fails before anything is committed, so a failure does not leave some of the updates done.
+* *A version that has the new value already is left alone,* with no empty commit.
+* *The catalog must have no uncommitted changes.* The commit would take them with it.
+
+== Inputs
+
+[cols="2,1,4"]
+|===
+| Input | Default | Description
+
+| `versions`
+| required
+| A JSON object from the name of a version to its new version: `{"spring-framework":"7.0.10"}`, or with the issue that the commit closes: `{"spring-framework":{"version":"7.0.10","issue":123}}`. The output `versions` of `map-train-versions` is the first form.
+
+| `toml-path`
+| `gradle/libs.versions.toml`
+| The version catalog, in the repository.
+
+| `path`
+| `.`
+| The directory of the git repository.
+
+| `require-issue`
+| `true`
+| Whether every update must have an issue. Set it to `false` for updates that have none: their commits have no `Closes` line.
+|===
+
+== Outputs
+
+[cols="1,4"]
+|===
+| Output | Description
+
+| `commits`
+| The commits that were made, as a JSON array of `{ dependency, version, issue, commit }`.
+
+| `count`
+| How many.
+|===
+
+== Fails when
+
+* the input is not a JSON object, or an update has no version, or the version is not one that can be written (only letters, digits, dots, hyphens and plus signs)
+* an update has no issue, and `require-issue` is `true`, or the issue is not a number
+* the catalog does not exist, has no such version, or has changes that are not committed
+* git cannot commit, most of all because it does not know who you are
+
+== Secrets and permissions
+
+None, it only works in the directory of the repository. The commits need no token. A job that goes on to push them has to be given the permission to: the release workflow pushes with the secret `RELEASE_AUTOMATION_TOKEN`, see `.github/RELEASE_AUTOMATION.adoc`.
+
+== Using it
+
+[source,yaml]
+----
+- run: |
+    git config user.name "github-actions[bot]"
+    git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+- uses: ./.github/actions/update-versions
+  with:
+    versions: '{"spring-framework":{"version":"7.0.10","issue":123},"micrometer":{"version":"1.16.8","issue":124}}'
+----
+
+== Running it locally
+
+It is an ordinary Node program (Node 24). `npm install` once in `.github/actions/`. Try it in a copy of your repository, as it makes commits:
+
+[source,shell]
+----
+cd .github/actions
+npm install
+git clone ../.. /tmp/try-update && git -C /tmp/try-update config user.name Alice && git -C /tmp/try-update config user.email alice@example.com
+export GITHUB_OUTPUT=$(mktemp)
+env 'INPUT_VERSIONS={"spring-framework":{"version":"7.0.10","issue":123},"micrometer":"1.16.8"}' \
+    'INPUT_REQUIRE-ISSUE=false' 'INPUT_PATH=/tmp/try-update' \
+    node src/update-versions/index.js
+git -C /tmp/try-update log --format='%an: %B' -3
+----
+
+`npm test` runs its tests, which make commits in temporary repositories. They need no network and no token.

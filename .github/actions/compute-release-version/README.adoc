@@ -1,0 +1,108 @@
+= compute-release-version
+
+Works out the version a snapshot version is going to be released as, and when, from the milestones of a repository. It knows nothing about the project it runs in, so it can be used by any project that plans its releases with milestones.
+
+== How it decides
+
+The candidate is the snapshot version without `-SNAPSHOT`.
+
+* If the candidate does not end with `.0`, it is the release version: `7.0.1-SNAPSHOT` is released as `7.0.1`, and the hotfix `7.0.1.1-SNAPSHOT` as `7.0.1.1`. The milestone with that exact title must exist.
+* If it ends with `.0`, the version is not released as itself first: `7.1.0-SNAPSHOT` is released as `7.1.0-M1`, `7.1.0-M2`, ... `7.1.0-RC1`, and then as `7.1.0`. The release version is the *open* milestone with the earliest due date of those. The title must match `7.1.0` or `7.1.0-M<n>` or `7.1.0-RC<n>` exactly, so `7.1.01` and `7.1.0.1` are not matches.
+
+The due date is the date of the due date of the milestone in UTC. GitHub keeps only the date of a milestone, and answers with it as midnight UTC (`2026-11-19T00:00:00Z`). Setting it is where the time zone matters: GitHub reads what it is given in the time zone of your account, so `2026-11-19T00:00:00Z` set by a user in the Americas is stored as the 18th (this was measured). Set a milestone due at noon UTC (`2026-11-19T12:00:00Z`), which is the same day in every time zone, as the tutorial does.
+
+== Inputs
+
+[cols="2,1,4"]
+|===
+| Input | Required | Description
+
+| `snapshot-version`
+| yes
+| The snapshot version, for example `7.0.1-SNAPSHOT`. It must end with `-SNAPSHOT`, and carries no milestone or release candidate.
+
+| `milestone-repository`
+| yes
+| The repository (`owner/repo`) whose milestones decide.
+
+| `milestone-token`
+| no
+| A token that can read its milestones. Without one, the request is unauthenticated, which only works for a public repository, and is rate limited.
+
+| `require-due-date`
+| no, `true`
+| Whether the milestone must have a due date.
+|===
+
+== Outputs
+
+[cols="1,4"]
+|===
+| Output | Description
+
+| `release-version`
+| The title of the milestone: `7.0.1`, or `7.1.0-RC1`.
+
+| `due-date`
+| Its due date, `YYYY-MM-DD` (UTC). Empty if it has none and `require-due-date` is `false`.
+|===
+
+== Fails when
+
+* the version is not a snapshot version, or is not `<major>.<minor>.<patch>[.<hotfix>]-SNAPSHOT`
+* the milestone does not exist (for a `.0` version: there is no open milestone of its releases)
+* the milestone has no due date, unless `require-due-date` is `false`
+* GitHub answers with an error. A `404` means the repository does not exist, or the token cannot read it.
+
+== Secrets and permissions
+
+The action only reads milestones.
+
+* For a *public* repository, no token is needed. `${{ secrets.GITHUB_TOKEN }}` is enough, and avoids the rate limit of unauthenticated requests. The workflow needs no extra permission.
+* For a *private* repository, the token needs to read its issues and milestones:
+** a fine-grained personal access token: *Issues: Read-only* on that repository
+** a classic personal access token: the `repo` scope
++
+Create it at https://github.com/settings/personal-access-tokens (fine-grained) or https://github.com/settings/tokens (classic), and store it as a secret of the repository the workflow runs in.
+
+== Using it
+
+[source,yaml]
+----
+- id: release
+  uses: ./.github/actions/compute-release-version
+  with:
+    snapshot-version: 7.0.1-SNAPSHOT
+    milestone-repository: ${{ github.repository_owner }}/spring-merge
+    milestone-token: ${{ secrets.GITHUB_TOKEN }}
+- run: echo "${{ steps.release.outputs.release-version }} is due ${{ steps.release.outputs.due-date }}"
+----
+
+== Running it locally
+
+It is an ordinary Node program (Node 24). `npm install` once in `.github/actions/`, then run it with its inputs as `INPUT_<NAME>` variables, which is how GitHub passes them, and the file of its outputs as `GITHUB_OUTPUT`:
+
+[source,shell]
+----
+cd .github/actions
+npm install
+export GITHUB_OUTPUT=$(mktemp)
+env 'INPUT_SNAPSHOT-VERSION=7.0.1-SNAPSHOT' \
+    'INPUT_MILESTONE-REPOSITORY=your-github-user/spring-merge' \
+    "INPUT_MILESTONE-TOKEN=$(gh auth token)" \
+    node src/compute-release-version/index.js
+cat "$GITHUB_OUTPUT"
+----
+
+`GITHUB_API_URL` points it to another server than GitHub. `test/support/fake-github.js` is a small fake of the milestones endpoint, with the milestones of the tutorial (`test/fixtures/milestones.json`):
+
+[source,shell]
+----
+node test/support/fake-github.js 8123 &
+env GITHUB_API_URL=http://127.0.0.1:8123 'INPUT_SNAPSHOT-VERSION=7.1.0-SNAPSHOT' \
+    'INPUT_MILESTONE-REPOSITORY=tutorial/spring-merge' \
+    node src/compute-release-version/index.js
+kill %1
+----
+
+`npm test` runs its tests, which need no network and no token.

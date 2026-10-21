@@ -1,0 +1,32 @@
+name: "ensure-dependency-issues"
+description: "Makes sure that every dependency update has an issue in a milestone, and creates the ones that are missing. An issue that exists, open or closed, is not created again"
+
+inputs:
+  versions:
+    description: "The updates, as a JSON object from the name of a dependency to its new version, as map-train-versions writes it"
+    required: true
+  repository:
+    description: "The repository (owner/repo) that has the issues"
+    required: true
+  milestone:
+    description: "The title of the milestone that the issues are in, for example the release version"
+    required: true
+  labels:
+    description: "The labels of the issues that are created, separated by commas or lines, for example: type: dependency-upgrade"
+    required: false
+  type:
+    description: "The issue type of the issues that are created (for a repository of an organization that has issue types)"
+    required: false
+  token:
+    description: "A token that can read and create issues in the repository"
+    required: true
+
+outputs:
+  issues:
+    description: "A JSON object from the name of a dependency to { version, issue, existed, closed }: the number of its issue, whether the issue existed before, and whether it is closed"
+  count:
+    description: "How many issues there are"
+
+runs:
+  using: "node24"
+  main: "../dist/ensure-dependency-issues/index.js"

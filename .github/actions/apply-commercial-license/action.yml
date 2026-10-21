@@ -1,0 +1,28 @@
+name: "apply-commercial-license"
+description: "Changes a git repository to the commercial license: the Broadcom license header in place of the Apache one in every Java file, and the commercial license as LICENSE.txt. For a hotfix, which is the only release that is commercial"
+
+inputs:
+  path:
+    description: "The directory of the git repository"
+    required: false
+    default: "."
+  commit-message:
+    description: "If given, the changes are committed with this message, signed off. If not, they are left in the working tree"
+    required: false
+  license-file:
+    description: "The license to copy to LICENSE.txt. The commercial license that is bundled with this action by default"
+    required: false
+
+outputs:
+  java-files:
+    description: "How many Java files got the Broadcom header"
+  license:
+    description: "true if LICENSE.txt was changed"
+  changed:
+    description: "The files that were changed, as a JSON array of paths"
+  commit:
+    description: "The commit that was made, empty if there is none"
+
+runs:
+  using: "node24"
+  main: "../dist/apply-commercial-license/index.js"

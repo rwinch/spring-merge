@@ -1,0 +1,17 @@
+[
+  { "number": 1, "title": "6.5.5", "state": "closed", "due_on": "2026-08-01T12:00:00Z" },
+  { "number": 2, "title": "7.0.0", "state": "closed", "due_on": "2026-09-24T12:00:00Z" },
+  { "number": 3, "title": "7.0.1", "state": "open", "due_on": "2026-11-19T12:00:00Z" },
+  { "number": 4, "title": "7.0.1.1", "state": "open", "due_on": "2026-11-19T12:00:00Z" },
+  { "number": 5, "title": "7.0.2", "state": "open", "due_on": "2027-01-14T12:00:00Z" },
+  { "number": 6, "title": "7.0.3", "state": "open", "due_on": "2027-02-11T12:00:00Z" },
+  { "number": 7, "title": "7.1.0-M3", "state": "closed", "due_on": "2026-09-24T12:00:00Z" },
+  { "number": 8, "title": "7.1.0-RC1", "state": "open", "due_on": "2026-11-19T12:00:00Z" },
+  { "number": 9, "title": "7.1.0", "state": "open", "due_on": "2026-12-17T12:00:00Z" },
+  { "number": 10, "title": "7.1.01", "state": "open", "due_on": "2026-10-01T12:00:00Z" },
+  { "number": 11, "title": "7.1.0.1", "state": "open", "due_on": "2026-10-02T12:00:00Z" },
+  { "number": 12, "title": "7.2.0-M1", "state": "open", "due_on": null },
+  { "number": 13, "title": "7.3.0-M1", "state": "open", "due_on": "2027-03-01T12:00:00Z" },
+  { "number": 14, "title": "7.3.0-RC1", "state": "open", "due_on": "2027-02-01T12:00:00Z" },
+  { "number": 15, "title": "7.5.0-M1", "state": "open", "due_on": "2027-06-01T23:30:00Z" }
+]

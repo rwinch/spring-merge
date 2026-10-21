@@ -1,0 +1,6 @@
+[versions]
+micrometer = "1.16.7"
+reactor = "2025.0.7"
+spring-data-bom = "2025.1.7"
+spring-framework = "7.0.9"
+spring-ldap = "4.0.5"

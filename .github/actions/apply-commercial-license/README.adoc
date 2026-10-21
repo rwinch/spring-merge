@@ -1,0 +1,104 @@
+= apply-commercial-license
+
+Changes a git repository to the commercial license: the Broadcom license header in place of the Apache one in every Java file, and the commercial license as `LICENSE.txt`. Only a *hotfix* is commercial, so this is only done for the branch of a hotfix. A release that comes from a frozen disclosure is the OSS release, and keeps the Apache license.
+
+It replaces the code of the old `hotfix.sh` of the tutorial that did the headers, in Node, so that it can be tested and run locally. The result is the same, byte for byte, on the files that it was compared on (the template of the tutorial, and sources of Spring Security).
+
+== What it does
+
+*The header of every Java file* that git tracks: only the comment at the very start of the file, and only if it says that it is licensed under the Apache License. It is replaced with a Broadcom copyright line, then the copyright lines that the header had, as they were. The license text is left out:
+
+[source,java]
+----
+/*
+ * Copyright 2004 Broadcom Inc. and/or its subsidiaries. All Rights Reserved.
+ * Copyright 2004-present the original author or authors.
+ */
+----
+
+A file with no header, another license, or the Broadcom header already, is left alone, so it is safe to do more than once. The line endings of a file are kept. A comment that is not the first thing in the file is not a header.
+
+*`LICENSE.txt`* is replaced with the commercial license. It is the file `LICENSE.txt` that is *bundled with the action*, next to its `action.yml`, because the commercial license is only ever needed for a hotfix, so it is not in the project. It is made if the project has none. `license-file` takes another one.
+
+*The commit* is only made if `commit-message` is given: the changed files, and only those, signed off with the identity that git is set up with, which must be set. A run with nothing to change makes no commit. Without a message, the changes are left in the working tree.
+
+== Inputs
+
+[cols="2,1,4"]
+|===
+| Input | Default | Description
+
+| `path`
+| `.`
+| The directory of the git repository.
+
+| `commit-message`
+|
+| If given, the changes are committed with it. For example `Commercial changes for 7.0.1.1`.
+
+| `license-file`
+| the bundled license
+| The license to copy to `LICENSE.txt`.
+|===
+
+== Outputs
+
+[cols="1,4"]
+|===
+| Output | Description
+
+| `java-files`
+| How many Java files got the Broadcom header.
+
+| `license`
+| `true` if `LICENSE.txt` was changed.
+
+| `changed`
+| The files that were changed, as a JSON array of paths.
+
+| `commit`
+| The commit that was made. Empty if there is none.
+|===
+
+== Fails when
+
+* the license file does not exist
+* it is to commit, and git does not know who commits (`git config user.name` and `user.email`, which is checked: git would make an identity up from the name of the user and of the machine otherwise)
+
+== Secrets and permissions
+
+None. It only works in the directory of the repository.
+
+== The bundled license
+
+`LICENSE.txt` of this directory is the commercial license of Spring Security, the Foundation Agreement of Broadcom (it is the one of the branch `5.8.x` of `spring-security-commercial`). It is proprietary text. It is in the tutorial, and so in the OSS repository that it makes, because the tutorial does not mind that. A real project keeps this action in its commercial repository, and out of the OSS one, or has it fetch the license from there.
+
+== Using it
+
+[source,yaml]
+----
+- run: |
+    git config user.name "github-actions[bot]"
+    git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+- uses: ./.github/actions/apply-commercial-license
+  with:
+    commit-message: Commercial changes for 7.0.1.1
+----
+
+== Running it locally
+
+It is an ordinary Node program (Node 24). `npm install` once in `.github/actions/`. Try it in a copy of your repository, because it changes files:
+
+[source,shell]
+----
+cd .github/actions
+npm install
+git clone ../.. /tmp/try-license && git -C /tmp/try-license config user.name Alice && git -C /tmp/try-license config user.email alice@example.com
+export GITHUB_OUTPUT=$(mktemp)
+env 'INPUT_PATH=/tmp/try-license' 'INPUT_COMMIT-MESSAGE=Commercial changes for 7.0.1.1' \
+    node src/apply-commercial-license/index.js
+git -C /tmp/try-license show --stat HEAD
+git -C /tmp/try-license show HEAD:src/main/java/org/springframework/example/Greeter.java | head -5
+----
+
+`npm test` runs its tests, which need no network and no token.

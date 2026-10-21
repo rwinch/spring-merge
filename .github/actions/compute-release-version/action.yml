@@ -1,0 +1,27 @@
+name: "compute-release-version"
+description: "Works out the version a snapshot version is released as, and its due date, from the milestones of a repository"
+
+inputs:
+  snapshot-version:
+    description: "The snapshot version of the project, for example 7.0.1-SNAPSHOT or 7.1.0-SNAPSHOT"
+    required: true
+  milestone-repository:
+    description: "The repository (owner/repo) whose milestones decide the release version and its due date"
+    required: true
+  milestone-token:
+    description: "A token that can read the milestones of the repository. GITHUB_TOKEN is enough for a public repository"
+    required: false
+  require-due-date:
+    description: "Whether the milestone must have a due date. Set to false to allow it not to"
+    required: false
+    default: "true"
+
+outputs:
+  release-version:
+    description: "The version the snapshot version is released as, the title of its milestone (for example 7.0.1 or 7.1.0-RC1)"
+  due-date:
+    description: "The due date of that milestone, as a date in UTC (YYYY-MM-DD). Empty if it has none and require-due-date is false"
+
+runs:
+  using: "node24"
+  main: "../dist/compute-release-version/index.js"

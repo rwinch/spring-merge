@@ -1,0 +1,2 @@
+# Keep each branch's own version when merging (needs: git config merge.ours.driver true)
+gradle.properties merge=ours

@@ -1,0 +1,44 @@
+name: "map-train-versions"
+description: "Works out which versions of a Gradle version catalog the release train asks to change, and to what"
+
+inputs:
+  release-versions-file:
+    description: "The path of the file with release-versions.json of the train (the project ids with their versions), as load-train writes it"
+    required: false
+  release-versions:
+    description: "The same as JSON, instead of a file. It is small, a file is for a train.yml"
+    required: false
+  train-file:
+    description: "The path of the file with train.yml of the train as JSON, as load-train writes it. Needed if require-joined is true"
+    required: false
+  train:
+    description: "The same as JSON, instead of a file. A real train is too large for an input: use the file"
+    required: false
+  toml-path:
+    description: "The path of the version catalog"
+    required: false
+    default: "gradle/libs.versions.toml"
+  prefer-hotfix:
+    description: "Whether to choose a hotfix version (7.0.10.1) if the train has one for the generation. A hotfix is never chosen otherwise"
+    required: false
+    default: "false"
+  require-joined:
+    description: "Whether a version must have joined the train (train.yml has its joined commit hash) to be changed"
+    required: false
+    default: "true"
+  suffix:
+    description: "Added to the version chosen, if it is not a hotfix, for example -INTERNAL-SNAPSHOT. A milestone or release candidate is dropped first"
+    required: false
+  hotfix-suffix:
+    description: "Added to the version chosen, if it is a hotfix, for example -SNAPSHOT"
+    required: false
+
+outputs:
+  versions:
+    description: "The versions to change, as a JSON object from the name in the version catalog to its new version"
+  count:
+    description: "How many versions there are to change"
+
+runs:
+  using: "node24"
+  main: "../dist/map-train-versions/index.js"
